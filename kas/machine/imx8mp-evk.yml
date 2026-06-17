@@ -13,6 +13,8 @@ header:
       file: kas/feature/virtualization.yml
     - repo: meta-avocado
       file: kas/target/distro.yml
+    - repo: meta-avocado
+      file: kas/feature/complete.yml
 
 repos:
   meta-avocado:
