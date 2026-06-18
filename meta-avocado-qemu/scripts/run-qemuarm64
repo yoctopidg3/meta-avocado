@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$(pwd)/build"
 
 SYSROOT_COMPONENTS_DIR="$BUILD_DIR/tmp/sysroots-components/x86_64"
@@ -8,22 +7,35 @@ SYSROOT_UNINATIVE_DIR="$BUILD_DIR/tmp/sysroots-uninative"
 
 # Image paths relative to build directory
 MACHINE_SHORT_NAME="qemuarm64"
-MACHINE="avocado-${MACHINE_SHORT_NAME}"
-DEPLOY_DIR="$BUILD_DIR/tmp/deploy/stone/_build"
-IMAGE_NAME="${MACHINE}-rootdisk.img"
-IMAGE_FILE="$DEPLOY_DIR/$IMAGE_NAME"
-QEMU_BIOS="${DEPLOY_DIR}/flash.bin"
-QEMU_EXEC="$BUILD_DIR/tmp/sysroots-components/x86_64/qemu-system-native/usr/bin/qemu-system-aarch64"
-QEMU_IMG="$BUILD_DIR/tmp/sysroots-components/x86_64/qemu-system-native/usr/bin/qemu-img"
-LIB_PATH=$("$SCRIPT_DIR/find-library-path" $QEMU_EXEC $SYSROOT_COMPONENTS_DIR $SYSROOT_UNINATIVE_DIR)
-echo "LIB_PATH=$LIB_PATH"
+STONE_DEPLOY_DIR="$BUILD_DIR/tmp/deploy/stone"
+STONE_BUILD_DIR="$STONE_DEPLOY_DIR/_build"
+IMAGE_FILE="$STONE_BUILD_DIR/avocado-os-${MACHINE_SHORT_NAME}.img"
+QEMU_BIOS="${STONE_DEPLOY_DIR}/flash.bin"
+QEMU_EXEC="$SYSROOT_COMPONENTS_DIR/qemu-system-native/usr/bin/qemu-system-aarch64"
+QEMU_IMG="$SYSROOT_COMPONENTS_DIR/qemu-system-native/usr/bin/qemu-img"
+QEMU_DATA_DIR="$SYSROOT_COMPONENTS_DIR/qemu-system-native/usr/share/qemu"
+
+# Bitbake native binaries use the uninative glibc loader as their ELF
+# interpreter, whose absolute path does not exist on a non-Yocto host (running
+# the binary directly fails with "cannot execute: required file not found").
+# Invoke them via that loader explicitly with --library-path covering all
+# native sysroot lib dirs. Mirrors run-qemux86-64.
+UNINATIVE_LOADER="$SYSROOT_UNINATIVE_DIR/x86_64-linux/lib/ld-linux-x86-64.so.2"
+LIB_PATH=$(find "$SYSROOT_COMPONENTS_DIR" -maxdepth 3 -name "lib" -type d 2>/dev/null | tr '\n' ':')
+LIB_PATH="${SYSROOT_UNINATIVE_DIR}/x86_64-linux/lib:${LIB_PATH%:}"
+
+run_native() {
+    "$UNINATIVE_LOADER" --library-path "$LIB_PATH" "$@"
+}
+
 echo "Starting QEMU ARM64..."
 echo "-------------------------------------"
 
-LD_LIBRARY_PATH="$LIB_PATH" "$QEMU_IMG" resize -f raw "$IMAGE_FILE" 1024M
+run_native "$QEMU_IMG" resize -f raw "$IMAGE_FILE" 1024M
 
 # Run QEMU with proper drive configuration
-LD_LIBRARY_PATH="$LIB_PATH" "$QEMU_EXEC" \
+run_native "$QEMU_EXEC" \
+  -L "$QEMU_DATA_DIR" \
   -m 1024 \
   -cpu cortex-a53 \
   -bios "${QEMU_BIOS}" \
