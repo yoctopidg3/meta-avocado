@@ -14,6 +14,10 @@
 #
 # name    | packages | expected-libs | boot
 zeromq    | zeromq   | libzmq.so.5   | yes
+# executorch ships only static libs + headers (-staticdev), so the SDK tier
+# asserts libexecutorch.a lands in the ext sysroot; there is no runtime .so to
+# load on a booted device, so boot is no.
+executorch   | executorch-staticdev | libexecutorch.a | no
 # One representative package per feature group. The always-on groups
 # (system-base, networking, multimedia, python) use packages that land on
 # every arch; the opengl-gated visual groups (graphics, qt, browsers) also run
